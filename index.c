@@ -16,6 +16,8 @@
 // TODO functions:     index_load, index_save, index_add
 
 #include "index.h"
+#include "pes.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +26,8 @@
 #include <unistd.h>
 #include <dirent.h>
 
+// 🔥 ADD THIS LINE
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 // Find an index entry by path (linear scan).
@@ -135,12 +139,18 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-    // TODO: Implement index loading
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
-}
+    FILE *f = fopen(INDEX_FILE, "rb");
+    if (!f) {
+        index->count = 0;
+        return 0;
+    }
 
+    fread(&index->count, sizeof(int), 1, f);
+    fread(index->entries, sizeof(IndexEntry), index->count, f);
+
+    fclose(f);
+    return 0;
+}
 // Save the index to .pes/index atomically.
 //
 // HINTS - Useful functions and syscalls:
@@ -152,12 +162,17 @@ int index_load(Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
-}
+    mkdir(".pes", 0777);
 
+    FILE *f = fopen(INDEX_FILE, "wb");
+    if (!f) return -1;
+
+    fwrite(&index->count, sizeof(int), 1, f);
+    fwrite(index->entries, sizeof(IndexEntry), index->count, f);
+
+    fclose(f);
+    return 0;
+}
 // Stage a file for the next commit.
 //
 // HINTS - Useful functions and syscalls:
@@ -168,8 +183,33 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
-    return -1;
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    rewind(f);
+
+    char *data = malloc(size);
+    fread(data, 1, size, f);
+    fclose(f);
+
+    ObjectID id;
+    object_write(OBJ_BLOB, data, size, &id);
+
+    free(data);
+
+    IndexEntry *e = &index->entries[index->count];
+
+    strcpy(e->path, path);
+    e->size = size;
+    e->mode = 0100644;
+
+    // 🔥 IMPORTANT: use correct field name
+    memcpy(&e->hash, &id, sizeof(ObjectID));  
+    // OR if field is named differently, adjust accordingly
+
+    index->count++;
+
+    return 0;
 }

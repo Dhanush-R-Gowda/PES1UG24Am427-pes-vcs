@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <inttypes.h>
 #include <time.h>
 #include <unistd.h>
@@ -192,10 +193,30 @@ int head_update(const ObjectID *new_commit) {
 //   - object_write      : saves the serialized text as OBJ_COMMIT
 //   - head_update       : moves the branch pointer to your new commit
 //
-// Returns 0 on success, -1 on error.
+// Returns 0 on success, -1 on 
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    // TODO: Implement commit creation
-    // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
+    char content[1024];
+
+    // STEP 1: build commit content
+    int len = sprintf(content, "message %s", message) + 1;
+
+    // STEP 2: write commit object
+    object_write(OBJ_COMMIT, content, len, commit_id_out);
+
+    // STEP 3: convert hash to hex
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(commit_id_out, hex);
+
+    // STEP 4: create directories
+    mkdir(".pes/refs", 0777);
+    mkdir(".pes/refs/heads", 0777);
+
+    // STEP 5: update HEAD reference
+    FILE *f = fopen(".pes/refs/heads/main", "w");
+    if (!f) return -1;
+
+    fprintf(f, "%s\n", hex);
+    fclose(f);
+
+    return 0;
 }
